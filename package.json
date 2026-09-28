@@ -14,7 +14,6 @@
     "test": "node scripts/run-tests.js",
     "import": "node scripts/import-csv.js",
     "backup": "bash scripts/backup.sh",
-    "gen-cert": "bash scripts/gen-cert.sh",
     "sample-data": "node scripts/make-sample-data.js",
     "qr-portal": "node qr-portal/serve.js"
   },

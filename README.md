@@ -237,6 +237,7 @@ CSV (or restore a backup) before the event.
 | `Could not connect to PostgreSQL` on start | `brew services start postgresql@16`, then `npm run setup` |
 | Phone cannot open the address | Phone must be on the laptop hotspot, not campus Wi-Fi. Try the other addresses the server printed. Disable the laptop firewall for Node. |
 | Camera does not open | Use the `https://` address and accept the warning. Otherwise use manual roll-number entry. |
+| Certificate warning will not clear, or the laptop changed networks | `rm -rf certs/` and restart. The server regenerates a cert covering the current LAN addresses on the next boot; phones accept it once more. |
 | "Server offline" on a phone | Hotspot dropped. Nothing was lost — reconnect and rescan. |
 | Wrong size on a student | Fix the CSV and re-import; collection status is preserved. |
 | Laptop must reboot | `npm start` again — all data is in PostgreSQL. |
