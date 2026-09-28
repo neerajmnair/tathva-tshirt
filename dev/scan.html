@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<title>DEV - Test Scanner</title>
+<style>
+  :root { --bg:#111318; --card:#1b1f27; --line:#2c323d; --fg:#f2f4f8; --muted:#9aa3b2;
+          --ok:#1f9d55; --warn:#d98200; --err:#c62f3b; --accent:#2f6df6; --dev:#8b5cf6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--bg); color:var(--fg); min-height:100%;
+              font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .devbar { background:var(--dev); color:#fff; font-size:12px; font-weight:700; letter-spacing:1px;
+            text-align:center; padding:5px; padding-top:calc(5px + env(safe-area-inset-top)); }
+  .devbar a { color:#fff; }
+  .wrap { max-width:560px; margin:0 auto; padding:12px 12px calc(28px + env(safe-area-inset-bottom)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .camwrap { position:relative; background:#000; border-radius:14px; overflow:hidden; aspect-ratio:4/3; margin-bottom:12px; }
+  video { width:100%; height:100%; object-fit:cover; display:block; }
+  #reticle { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+             width:60%; aspect-ratio:1; border:3px solid rgba(255,255,255,.85); border-radius:16px; }
+  #camMsg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            text-align:center; padding:18px; color:#fff; font-size:14px; line-height:1.5; background:#000; }
+  #camMsg.hide { display:none; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; letter-spacing:.5px; text-transform:uppercase; }
+  input { width:100%; padding:13px; font-size:17px; border-radius:11px; border:1px solid var(--line);
+          background:#161a21; color:var(--fg); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  button { font-family:inherit; border:0; border-radius:11px; color:#fff; font-weight:700; cursor:pointer; }
+  .btn-primary { width:100%; padding:15px; font-size:17px; background:var(--accent); }
+  .btn-give { background:var(--ok); }
+  .btn-ghost { background:#262c36; padding:11px 13px; font-size:14px; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+  .row > button, .row > input { flex:1; }
+  .kv { display:flex; justify-content:space-between; gap:12px; font-size:14px; padding:5px 0; border-bottom:1px solid var(--line); }
+  .kv:last-child { border-bottom:0; }
+  .kv span:first-child { color:var(--muted); }
+  .kv span:last-child { font-family:ui-monospace,Menlo,monospace; text-align:right; word-break:break-all; }
+  .payload { font-family:ui-monospace,Menlo,monospace; font-size:20px; font-weight:700; word-break:break-all; }
+  .banner { border-radius:10px; padding:11px; text-align:center; font-size:16px; font-weight:800; letter-spacing:.5px; margin-top:10px; }
+  .banner.ok { background:var(--ok); } .banner.warn { background:var(--warn); } .banner.err { background:var(--err); }
+  .banner small { display:block; font-size:13px; font-weight:600; opacity:.92; margin-top:3px; letter-spacing:0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 10px; }
+  #log { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px; line-height:1.55;
+         max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-all; color:var(--muted); }
+  #log .req { color:#8ab4ff; } #log .res2 { color:#5ad07f; } #log .res4 { color:#ffc46b; } #log .res5 { color:#ff7b86; }
+  #log .t { color:#5f6774; }
+  .hide { display:none !important; }
+  .muted { color:var(--muted); font-size:13px; line-height:1.5; }
+  details summary { color:var(--muted); font-size:13px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="devbar">DEVELOPMENT SCANNER &middot; <a href="/dev/qr-gen.html">generator</a> &middot; <a href="/">real scanner</a></div>
+
+<div class="wrap">
+
+  <div class="camwrap">
+    <video id="video" playsinline muted autoplay></video>
+    <div id="reticle"></div>
+    <div id="camMsg">Starting camera…</div>
+  </div>
+
+  <div class="row" style="margin:0 0 12px">
+    <input id="manualInput" placeholder="B25CS001" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button id="manualGo" class="btn-ghost" style="flex:0 0 auto">LOOK UP</button>
+  </div>
+
+  <section id="result" class="card hide">
+    <h2>Scanned payload</h2>
+    <div class="payload" id="rPayload">--</div>
+    <div class="muted" id="rPayloadMeta" style="margin-top:4px"></div>
+    <div style="margin-top:12px">
+      <div class="kv"><span>Roll number</span><span id="rRoll">--</span></div>
+      <div class="kv"><span>Name</span><span id="rName">--</span></div>
+      <div class="kv"><span>Size</span><span id="rSize">--</span></div>
+      <div class="kv"><span>Status</span><span id="rStatus">--</span></div>
+    </div>
+    <div id="rBanner" class="banner hide"></div>
+    <div class="row">
+      <button id="btnGive" class="btn-primary btn-give">POST /collect</button>
+    </div>
+    <div class="row">
+      <button id="btnNext" class="btn-ghost">SCAN NEXT</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>API log</h2>
+    <div id="log">Waiting for a scan…</div>
+    <div class="row">
+      <button id="btnClear" class="btn-ghost">CLEAR</button>
+      <button id="btnHealth" class="btn-ghost">GET /api/health</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Settings</summary>
+      <div style="margin-top:12px">
+        <label for="apiBase">API base URL (blank = this server)</label>
+        <input id="apiBase" placeholder="https://192.168.1.5:3443" autocomplete="off" spellcheck="false">
+        <label for="staff" style="margin-top:12px">collectedBy</label>
+        <input id="staff" placeholder="dev-phone" autocomplete="off">
+        <p class="muted" style="margin-bottom:0">
+          Saved on this device. <code>collectedBy</code> is sent with every POST /collect so dev
+          collections are easy to spot in the dashboard and the export.
+        </p>
+      </div>
+    </details>
+  </section>
+
+</div>
+
+<script src="/vendor/jsqr.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var API_TIMEOUT = 8000;
+  var current = null, busy = false, scanning = false, stream = null, detector = null;
+  var lastPayload = '', lastPayloadAt = 0;
+
+  // ------------------------------------------------------------- settings
+  var apiBase = localStorage.getItem('devscan_api') || '';
+  var staff = localStorage.getItem('devscan_staff') || 'dev-phone';
+  $('apiBase').value = apiBase;
+  $('staff').value = staff;
+  $('apiBase').onchange = function () {
+    apiBase = this.value.trim().replace(/\/+$/, '');
+    localStorage.setItem('devscan_api', apiBase);
+    log('req', 'API base set to ' + (apiBase || '(same origin)'));
+  };
+  $('staff').onchange = function () {
+    staff = this.value.trim() || 'dev-phone';
+    localStorage.setItem('devscan_staff', staff);
+  };
+
+  // ------------------------------------------------------------------ log
+  function esc(s) {
+    return String(s).replace(/[&<>]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]; });
+  }
+  function log(cls, text) {
+    var el = $('log');
+    if (el.dataset.empty !== '0') { el.textContent = ''; el.dataset.empty = '0'; }
+    var t = new Date().toLocaleTimeString([], { hour12: false });
+    el.insertAdjacentHTML('beforeend',
+      '<div><span class="t">' + t + '</span> <span class="' + cls + '">' + esc(text) + '</span></div>');
+    el.scrollTop = el.scrollHeight;
+  }
+  $('btnClear').onclick = function () {
+    $('log').textContent = 'Waiting for a scan…'; $('log').dataset.empty = '1';
+  };
+
+  // ------------------------------------------------------------------ api
+  // Every call is logged with its method, URL, status and body, so you can see
+  // exactly what the phone sent and exactly what Express answered.
+  function api(path, opts) {
+    opts = opts || {};
+    var url = (apiBase || '') + path;
+    var method = opts.method || 'GET';
+    log('req', '-> ' + method + ' ' + url + (opts.body ? ' ' + opts.body : ''));
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, API_TIMEOUT);
+    opts.signal = ctrl.signal;
+    var started = Date.now();
+    return fetch(url, opts)
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          var body;
+          try { body = JSON.parse(txt); } catch (e) { body = { raw: txt }; }
+          var cls = r.status < 300 ? 'res2' : r.status < 500 ? 'res4' : 'res5';
+          log(cls, '<- ' + r.status + ' (' + (Date.now() - started) + 'ms) ' + JSON.stringify(body));
+          return { status: r.status, body: body };
+        });
+      })
+      .catch(function (e) {
+        log('res5', '<- network error: ' + (e && e.name === 'AbortError' ? 'timeout after ' + API_TIMEOUT + 'ms' : e.message));
+        throw e;
+      })
+      .finally(function () { clearTimeout(t); });
+  }
+  $('btnHealth').onclick = function () { api('/api/health').catch(function () {}); };
+
+  function beep(ok) {
+    try { navigator.vibrate && navigator.vibrate(ok ? 40 : [60, 50, 60]); } catch (e) {}
+  }
+  function banner(kind, text, sub) {
+    var el = $('rBanner');
+    if (!kind) { el.classList.add('hide'); el.innerHTML = ''; return; }
+    el.className = 'banner ' + kind;
+    el.innerHTML = esc(text) + (sub ? '<small>' + esc(sub) + '</small>' : '');
+  }
+  function fmtTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // --------------------------------------------------------------- camera
+  var video = $('video');
+  var canvas = document.createElement('canvas');
+  var cctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function camMsg(text) {
+    var el = $('camMsg');
+    if (!text) { el.classList.add('hide'); return; }
+    el.classList.remove('hide'); el.textContent = text;
+  }
+
+  function startCamera() {
+    if (stream) { camMsg(''); scanning = true; requestAnimationFrame(tick); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return camMsg(window.isSecureContext
+        ? 'No camera API in this browser. Type a roll number below instead.'
+        : 'Camera needs HTTPS. Open the https:// address printed by the server, or type a roll number below.');
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    }).then(function (s) {
+      stream = s; video.srcObject = s; return video.play();
+    }).then(function () {
+      if (window.BarcodeDetector) {
+        try { detector = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; }
+      }
+      log('req', 'camera started (' + (detector ? 'BarcodeDetector' : 'jsQR') + ')');
+      camMsg(''); scanning = true; requestAnimationFrame(tick);
+    }).catch(function (e) {
+      camMsg('Camera unavailable (' + (e && e.name ? e.name : 'error') + '). Type a roll number below instead.');
+    });
+  }
+
+  function tick() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      if (detector) {
+        detector.detect(video).then(function (codes) {
+          if (codes && codes.length) onPayload(codes[0].rawValue);
+        }).catch(function () { detector = null; });
+      } else {
+        var w = video.videoWidth, h = video.videoHeight;
+        if (w && h) {
+          var side = Math.floor(Math.min(w, h) * 0.75);
+          canvas.width = side; canvas.height = side;
+          cctx.drawImage(video, (w - side) / 2, (h - side) / 2, side, side, 0, 0, side, side);
+          var img = cctx.getImageData(0, 0, side, side);
+          var code = window.jsQR(img.data, side, side, { inversionAttempts: 'dontInvert' });
+          if (code && code.data) onPayload(code.data);
+        }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function onPayload(raw) {
+    var now = Date.now();
+    if (busy) return;
+    if (raw === lastPayload && now - lastPayloadAt < 2500) return;
+    lastPayload = raw; lastPayloadAt = now;
+    log('req', 'QR decoded: "' + raw + '" (' + raw.length + ' chars)');
+    lookup(raw, true);
+  }
+
+  // --------------------------------------------------------------- lookup
+  function lookup(raw, fromCamera) {
+    busy = true; scanning = false;
+    current = null;
+    $('result').classList.remove('hide');
+    $('rPayload').textContent = raw;
+    $('rPayloadMeta').textContent = (fromCamera ? 'from camera' : 'typed') + ' · ' + raw.length + ' chars · sent verbatim to the API';
+    $('rRoll').textContent = '…'; $('rName').textContent = '…';
+    $('rSize').textContent = '…'; $('rStatus').textContent = '…';
+    banner(null);
+    $('btnGive').classList.add('hide');
+
+    api('/api/students/' + encodeURIComponent(String(raw).trim()))
+      .then(function (r) {
+        var b = r.body || {};
+        if (r.status === 200 && b.student) {
+          current = b.student;
+          render(b.student);
+        } else {
+          beep(false);
+          $('rRoll').textContent = b.rollNo || String(raw);
+          $('rName').textContent = '--'; $('rSize').textContent = '--';
+          $('rStatus').textContent = b.status || ('HTTP ' + r.status);
+          if (b.status === 'NOT_FOUND') banner('err', 'NOT FOUND', 'No such roll number in the students table.');
+          else if (b.status === 'INVALID_ROLL_NO') banner('err', 'INVALID ROLL NO', 'Rejected by the server before any lookup.');
+          else banner('err', 'HTTP ' + r.status, b.error || '');
+        }
+      })
+      .catch(function () {
+        beep(false);
+        $('rStatus').textContent = 'unreachable';
+        banner('err', 'SERVER UNREACHABLE', 'Nothing was marked. Check the API base URL in Settings.');
+      })
+      .finally(function () { busy = false; });
+  }
+
+  function render(s) {
+    $('rRoll').textContent = s.rollNo;
+    $('rName').textContent = s.name || '--';
+    $('rSize').textContent = s.tshirtSize;
+    $('rStatus').textContent = s.collected ? 'ALREADY_COLLECTED' : 'PENDING';
+    if (s.collected) {
+      beep(false);
+      banner('warn', 'ALREADY COLLECTED',
+        'At ' + fmtTime(s.collectedAt) + (s.collectedBy ? ' by ' + s.collectedBy : ''));
+      $('btnGive').classList.add('hide');
+    } else {
+      beep(true);
+      banner(null);
+      $('btnGive').textContent = 'POST /collect';
+      $('btnGive').disabled = false;
+      $('btnGive').classList.remove('hide');
+    }
+  }
+
+  // -------------------------------------------------------------- collect
+  function collect() {
+    if (!current || busy) return;
+    busy = true;
+    var btn = $('btnGive');
+    btn.disabled = true; btn.textContent = 'POSTING…';
+
+    api('/api/students/' + encodeURIComponent(current.rollNo) + '/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collectedBy: staff })
+    }).then(function (r) {
+      var b = r.body || {};
+      if (b.success && b.status === 'COLLECTED') {
+        beep(true);
+        $('rStatus').textContent = 'COLLECTED';
+        banner('ok', 'COLLECTED - ' + b.student.tshirtSize, 'Recorded at ' + fmtTime(b.student.collectedAt));
+        btn.classList.add('hide');
+        current = b.student;
+      } else if (b.status === 'ALREADY_COLLECTED') {
+        beep(false);
+        $('rStatus').textContent = 'ALREADY_COLLECTED';
+        banner('warn', 'ALREADY COLLECTED (409)',
+          'At ' + fmtTime(b.student && b.student.collectedAt) +
+          (b.student && b.student.collectedBy ? ' by ' + b.student.collectedBy : ''));
+        btn.classList.add('hide');
+      } else {
+        beep(false);
+        banner('err', 'NOT SAVED', b.error || ('HTTP ' + r.status));
+        btn.disabled = false; btn.textContent = 'RETRY POST /collect';
+      }
+    }).catch(function () {
+      beep(false);
+      banner('err', 'NOT SAVED', 'Server unreachable - retry.');
+      btn.disabled = false; btn.textContent = 'RETRY POST /collect';
+    }).finally(function () { busy = false; });
+  }
+  $('btnGive').onclick = collect;
+
+  $('btnNext').onclick = function () {
+    $('result').classList.add('hide');
+    banner(null); current = null; lastPayload = '';
+    $('btnGive').disabled = false; $('btnGive').textContent = 'POST /collect';
+    if (stream) { scanning = true; requestAnimationFrame(tick); }
+  };
+
+  // --------------------------------------------------------- manual entry
+  $('manualGo').onclick = function () {
+    var v = ($('manualInput').value || '').trim();
+    if (!v) return;
+    lookup(v, false);
+  };
+  $('manualInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('manualGo').click(); });
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && stream && $('result').classList.contains('hide')) {
+      scanning = true; requestAnimationFrame(tick);
+    }
+  });
+
+  $('log').dataset.empty = '1';
+  startCamera();
+})();
+</script>
+</body>
+</html>

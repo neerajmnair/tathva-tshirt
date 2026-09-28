@@ -119,6 +119,12 @@ async function main() {
   if (!primary) {
     console.log(`\n  No LAN interface detected. Turn on the laptop hotspot / Wi-Fi and restart.`);
   }
+  if (process.env.DEV_TOOLS === '1') {
+    console.log(`\n  DEV TOOLS (DEV_TOOLS=1)`);
+    console.log(`    http://localhost:${PORT}/dev/           QR generator + test scanner`);
+    if (httpsUp && primary) console.log(`    https://${primary}:${HTTPS_PORT}/dev/     (phone, camera works here)`);
+  }
+
   console.log(`\n  Press Ctrl+C to stop.\n${line}\n`);
 
   const shutdown = () => {

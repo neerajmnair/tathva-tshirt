@@ -6,6 +6,10 @@ const db = require('./db');
 const { parseStudentCsv, toCsv, normalizeRollNo, isValidRollNo } = require('./csv');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
+const DEV_DIR = path.join(__dirname, '..', '..', 'dev');
+
+/** Dev-only QR generator + test scanner. Off unless DEV_TOOLS=1 is set. */
+const DEV_TOOLS = process.env.DEV_TOOLS === '1';
 
 /** QR payloads may be bare ("B22CS001") or versioned ("TATHVA:B22CS001"). */
 function parseQrPayload(raw) {
@@ -286,6 +290,11 @@ function createApp(options = {}) {
   }));
 
   // ----------------------------------------------------- static frontends
+  // Development fixtures, never mounted during a normal `npm start`.
+  if (DEV_TOOLS) {
+    app.use('/dev', express.static(DEV_DIR, { extensions: ['html'], maxAge: 0 }));
+  }
+
   app.use(express.static(PUBLIC_DIR, { extensions: ['html'], maxAge: 0 }));
 
   app.use('/api', (req, res) => res.status(404).json({ success: false, status: 'NOT_FOUND', error: 'Unknown endpoint' }));

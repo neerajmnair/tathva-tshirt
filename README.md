@@ -208,6 +208,28 @@ student, concurrent collects on different students, CSV import/duplicates/
 invalid rows, re-import safety, stats, search, export, restart persistence, and
 a QR generate→decode round trip.
 
+## Dev tools (development only)
+
+A QR generator and a test scanner, for trying the flow without printing real
+passes. They are **not** mounted unless `DEV_TOOLS=1`, so `npm start` on the
+event laptop never exposes them.
+
+```bash
+npm run dev:tools          # DEV_TOOLS=1 + node --watch
+```
+
+| Page | What it does |
+|---|---|
+| `/dev/qr-gen.html` | Type a roll number, get a QR whose payload is exactly that text. Decodes the QR it just drew and shows the result, so you can see there is no prefix or wrapper. Optional read-only "check in database". |
+| `/dev/scan.html` | Scans a QR and calls the real API, with a log of every request and response (method, URL, status, timing, body). Manual entry and an API base override for pointing a phone at another host. |
+
+Open `/dev/` on the laptop for the generator; open the `https://` address on a
+phone for the scanner, since the camera needs a secure context.
+
+Collections made from the test scanner are real writes to `students`. Set
+`collectedBy` in the scanner's Settings so they stand out, and re-import the
+CSV (or restore a backup) before the event.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -226,6 +248,7 @@ a QR generate→decode round trip.
 server/src/     Express app, routes, CSV parsing, schema, migration
 server/test/    node:test suites
 public/         phone scanner (index.html) + dashboard (dashboard.html)
+dev/            development-only QR generator + test scanner (DEV_TOOLS=1)
 qr-portal/      separate Google-auth QR page (static)
 scripts/        db setup, backup, restore, CSV import, sample data
 sample-data/    students.csv

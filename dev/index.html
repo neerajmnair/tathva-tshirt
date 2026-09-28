@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEV - Tathva Tools</title>
+<style>
+  :root { --bg:#111318; --card:#1b1f27; --line:#2c323d; --fg:#f2f4f8; --muted:#9aa3b2; --dev:#8b5cf6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); min-height:100vh;
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .devbar { background:var(--dev); color:#fff; font-size:13px; font-weight:700; letter-spacing:1px;
+            text-align:center; padding:6px; }
+  .wrap { max-width:560px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:24px; margin:16px 0 6px; }
+  p.sub { color:var(--muted); margin:0 0 24px; font-size:14px; line-height:1.6; }
+  a.tile { display:block; text-decoration:none; color:inherit; background:var(--card);
+           border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:12px; }
+  a.tile:hover { border-color:var(--dev); }
+  a.tile strong { display:block; font-size:18px; margin-bottom:5px; }
+  a.tile span { color:var(--muted); font-size:14px; line-height:1.5; }
+  .note { border-left:3px solid var(--dev); padding:2px 0 2px 14px; color:var(--muted);
+          font-size:13.5px; line-height:1.65; margin-top:26px; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:#20252e;
+         padding:1px 5px; border-radius:5px; font-size:.92em; }
+</style>
+</head>
+<body>
+
+<div class="devbar">DEVELOPMENT ONLY</div>
+
+<div class="wrap">
+  <h1>Dev tools</h1>
+  <p class="sub">Test fixtures for the t-shirt distribution flow. Not part of the event-day setup.</p>
+
+  <a class="tile" href="/dev/qr-gen.html">
+    <strong>QR generator &rarr;</strong>
+    <span>Type a roll number, get a QR whose payload is exactly that text. Verifies itself by
+    decoding the QR it just drew.</span>
+  </a>
+
+  <a class="tile" href="/dev/scan.html">
+    <strong>Test scanner &rarr;</strong>
+    <span>Scans a QR and calls the real Express API, with a full request/response log of every
+    <code>GET /api/students/:rollNo</code> and <code>POST /api/students/:rollNo/collect</code>.</span>
+  </a>
+
+  <a class="tile" href="/">
+    <strong>Real phone scanner &rarr;</strong>
+    <span>The production scanner staff use on event day. Unchanged.</span>
+  </a>
+
+  <a class="tile" href="/dashboard">
+    <strong>Dashboard &rarr;</strong>
+    <span>Live collection stats.</span>
+  </a>
+
+  <p class="note">
+    These pages are served only when the server starts with <code>DEV_TOOLS=1</code>
+    (<code>npm run dev:tools</code>). A normal <code>npm start</code> does not expose
+    <code>/dev</code> at all.
+    <br><br>
+    Collections made from the test scanner are <strong>real</strong> database writes. Set
+    <code>collectedBy</code> in its Settings so they are easy to spot, and re-import the CSV
+    or restore a backup before the event.
+  </p>
+</div>
+
+</body>
+</html>
