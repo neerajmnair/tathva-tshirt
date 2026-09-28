@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tathva T-Shirt Dashboard</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#dfe3ea; --fg:#14181f; --muted:#6b7482;
+          --ok:#1f9d55; --warn:#b26a00; --accent:#2f6df6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { background:#14181f; color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; font-weight:700; letter-spacing:.5px; }
+  #phoneUrl { font-family:ui-monospace,Menlo,monospace; background:#242a34; padding:5px 10px; border-radius:6px; font-size:13px; }
+  #health { margin-left:auto; font-size:13px; } #health.on{color:#5ad07f} #health.off{color:#ff7b86}
+  .wrap { max-width:1180px; margin:0 auto; padding:18px 20px 60px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .stat .k { font-size:12px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); }
+  .stat .v { font-size:40px; font-weight:800; line-height:1.15; }
+  .bar { height:12px; background:#e6eaf1; border-radius:999px; overflow:hidden; margin-top:10px; }
+  .bar > i { display:block; height:100%; background:var(--ok); width:0; transition:width .4s; }
+  h2 { font-size:13px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin:26px 0 10px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th,td { text-align:left; padding:9px 12px; font-size:14px; border-bottom:1px solid var(--line); }
+  th { background:#eef1f6; font-size:12px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); }
+  tr:last-child td { border-bottom:0; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+  .pill.yes { background:#e2f4e9; color:var(--ok); } .pill.no { background:#eef1f6; color:var(--muted); }
+  .sizebar { position:relative; background:#e6eaf1; border-radius:5px; height:20px; min-width:120px; }
+  .sizebar > i { position:absolute; inset:0 auto 0 0; background:var(--ok); border-radius:5px; }
+  .sizebar > span { position:relative; font-size:12px; font-weight:700; line-height:20px; padding-left:8px; color:#14181f; }
+  input[type=search], input[type=text] { padding:10px 12px; font-size:15px; border:1px solid var(--line); border-radius:8px; width:320px; max-width:100%; }
+  button { font:inherit; font-weight:600; padding:10px 14px; border-radius:8px; border:1px solid var(--line);
+           background:var(--card); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .muted { color:var(--muted); font-size:13px; }
+  pre.summary { background:#14181f; color:#e8ecf3; padding:14px; border-radius:8px; font-size:13px; overflow:auto; max-height:320px; }
+  dialog { border:0; border-radius:12px; padding:0; max-width:620px; width:92%; }
+  dialog .body { padding:20px; } dialog h3 { margin:0 0 10px; }
+  code { background:#eef1f6; padding:2px 6px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TATHVA T-SHIRT DISTRIBUTION</h1>
+  <span class="muted">Phones open:</span> <span id="phoneUrl">detecting...</span>
+  <span id="health">● checking</span>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="card stat"><div class="k">Total students</div><div class="v" id="sTotal">--</div></div>
+    <div class="card stat"><div class="k">Collected</div><div class="v" id="sCollected" style="color:var(--ok)">--</div></div>
+    <div class="card stat"><div class="k">Remaining</div><div class="v" id="sRemaining">--</div></div>
+    <div class="card stat"><div class="k">Progress</div><div class="v" id="sProgress">--</div>
+      <div class="bar"><i id="sBar"></i></div></div>
+  </div>
+
+  <h2>Size breakdown (collected / total)</h2>
+  <table id="sizeTable"><thead><tr><th style="width:80px">Size</th><th style="width:60%">Collected</th>
+    <th>Given</th><th>Total</th><th>Remaining</th></tr></thead><tbody></tbody></table>
+
+  <h2>Recent collections</h2>
+  <table id="recentTable"><thead><tr><th>Time</th><th>Roll No</th><th>Name</th><th>Size</th><th>By</th></tr></thead><tbody></tbody></table>
+
+  <h2>Per-staff totals</h2>
+  <table id="staffTable"><thead><tr><th>Staff / phone</th><th>Collected</th></tr></thead><tbody></tbody></table>
+
+  <h2>Search students</h2>
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Roll number or name..." autocomplete="off">
+    <select id="statusFilter" style="padding:10px;border-radius:8px;border:1px solid var(--line)">
+      <option value="all">All</option><option value="pending">Not collected</option><option value="collected">Collected</option>
+    </select>
+    <span class="muted" id="searchCount"></span>
+  </div>
+  <table id="searchTable" style="margin-top:10px"><thead><tr><th>Roll No</th><th>Name</th><th>Size</th>
+    <th>Status</th><th>Time</th><th>By</th></tr></thead><tbody></tbody></table>
+
+  <h2>Data</h2>
+  <div class="toolbar">
+    <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
+    <button class="primary" id="btnImport">Import CSV</button>
+    <button id="btnExport">Export CSV</button>
+    <button id="btnBackup">Backup database</button>
+    <span class="muted">Re-importing never clears who already collected.</span>
+  </div>
+  <pre class="summary" id="importSummary" style="display:none"></pre>
+</div>
+
+<dialog id="backupDlg"><div class="body">
+  <h3>Backup the database</h3>
+  <p class="muted">Run this in a terminal in the project folder. It writes a full SQL dump plus a CSV into <code>backups/</code>.</p>
+  <pre class="summary">npm run backup</pre>
+  <p class="muted">Restore a dump with:</p>
+  <pre class="summary">bash scripts/restore.sh backups/&lt;file&gt;.sql</pre>
+  <p class="muted">The <b>Export CSV</b> button above also downloads the current state instantly.</p>
+  <div style="text-align:right"><button onclick="document.getElementById('backupDlg').close()">Close</button></div>
+</div></dialog>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var fmt = function (iso) { return iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''; };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); };
+
+  function get(path) {
+    var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+    return fetch(path, { signal: c.signal }).then(function (r) { return r.json(); })
+      .finally(function () { clearTimeout(t); });
+  }
+
+  // ------------------------------------------------------------- stats poll
+  function renderStats(s) {
+    $('#sTotal').textContent = s.total;
+    $('#sCollected').textContent = s.collected;
+    $('#sRemaining').textContent = s.remaining;
+    $('#sProgress').textContent = s.progress + '%';
+    $('#sBar').style.width = s.progress + '%';
+
+    $('#sizeTable tbody').innerHTML = s.sizes.map(function (z) {
+      var pct = z.total ? Math.round((z.collected / z.total) * 100) : 0;
+      return '<tr><td><b>' + esc(z.size) + '</b></td>' +
+        '<td><div class="sizebar"><i style="width:' + pct + '%"></i><span>' + pct + '%</span></div></td>' +
+        '<td>' + z.collected + '</td><td>' + z.total + '</td><td>' + z.remaining + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">No students imported yet.</td></tr>';
+
+    $('#recentTable tbody').innerHTML = s.recent.map(function (r) {
+      return '<tr><td>' + fmt(r.collectedAt) + '</td><td><b>' + esc(r.rollNo) + '</b></td><td>' +
+        esc(r.name) + '</td><td><b>' + esc(r.tshirtSize) + '</b></td><td>' + esc(r.collectedBy) + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">Nothing collected yet.</td></tr>';
+
+    $('#staffTable tbody').innerHTML = s.byStaff.map(function (r) {
+      return '<tr><td>' + esc(r.staff) + '</td><td>' + r.count + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="muted">--</td></tr>';
+  }
+
+  function poll() {
+    get('/api/stats').then(function (s) {
+      $('#health').className = 'on'; $('#health').textContent = '● connected';
+      renderStats(s);
+    }).catch(function () {
+      $('#health').className = 'off'; $('#health').textContent = '● server offline';
+    });
+  }
+  poll(); setInterval(poll, 3000);
+
+  // ----------------------------------------------------------------- search
+  var timer = null;
+  function search() {
+    var q = $('#q').value.trim();
+    var st = $('#statusFilter').value;
+    var limit = q ? 200 : 25;
+    get('/api/students?limit=' + limit + '&status=' + st + '&search=' + encodeURIComponent(q)).then(function (d) {
+      $('#searchCount').textContent = d.count + ' shown' +
+        (d.count === limit ? (q ? ' (refine to see more)' : ' of ' + st + ' - type to search') : '');
+      $('#searchTable tbody').innerHTML = d.students.map(function (s) {
+        return '<tr><td><b>' + esc(s.rollNo) + '</b></td><td>' + esc(s.name) + '</td><td><b>' +
+          esc(s.tshirtSize) + '</b></td><td>' +
+          (s.collected ? '<span class="pill yes">COLLECTED</span>' : '<span class="pill no">pending</span>') +
+          '</td><td>' + fmt(s.collectedAt) + '</td><td>' + esc(s.collectedBy) + '</td></tr>';
+      }).join('') || '<tr><td colspan="6" class="muted">No matches.</td></tr>';
+    });
+  }
+  $('#q').addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(search, 200); });
+  $('#statusFilter').addEventListener('change', search);
+  search(); setInterval(function () { if (document.hasFocus()) search(); }, 5000);
+
+  // -------------------------------------------------------------- phone URL
+  get('/api/network').then(function (n) {
+    var ip = (n.interfaces[0] || {}).address;
+    $('#phoneUrl').textContent = ip ? 'https://' + ip + ':' + n.httpsPort + '   (or http://' + ip + ':' + n.httpPort + ')'
+                                    : 'no LAN interface - turn on the hotspot';
+  }).catch(function () {});
+
+  // ------------------------------------------------------------ import/export
+  $('#btnImport').onclick = function () { $('#csvFile').click(); };
+  $('#csvFile').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var box = $('#importSummary');
+      box.style.display = 'block'; box.textContent = 'Importing ' + f.name + '...';
+      fetch('/api/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: reader.result })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.success) { box.textContent = 'IMPORT FAILED\n\n' + d.error; return; }
+        var s = d.summary;
+        var out = 'IMPORT SUMMARY  (' + f.name + ')\n' +
+          '-------------------------------------------\n' +
+          'Rows in file          : ' + s.totalRows + '\n' +
+          'New students added    : ' + s.imported + '\n' +
+          'Existing updated      : ' + s.updated + '   (collection status kept)\n' +
+          'Duplicates in file    : ' + s.duplicatesInFile + '\n' +
+          'Invalid rows skipped  : ' + s.invalid + '\n' +
+          'Failed rows           : ' + s.failed + '\n';
+        if (d.duplicates.length) out += '\nDuplicates:\n' + d.duplicates.map(function (x) {
+          return '  line ' + x.line + ': ' + x.rollNo + ' (first seen on line ' + x.firstSeenLine + ')'; }).join('\n') + '\n';
+        if (d.invalidRows.length) out += '\nInvalid rows:\n' + d.invalidRows.map(function (x) {
+          return '  line ' + x.line + ': ' + (x.rollNo || '(blank)') + ' - ' + x.reason; }).join('\n') + '\n';
+        box.textContent = out;
+        poll(); search();
+      }).catch(function (e) { box.textContent = 'IMPORT FAILED\n\n' + e.message; });
+    };
+    reader.readAsText(f);
+    this.value = '';
+  };
+  $('#btnExport').onclick = function () { window.location = '/api/export'; };
+  $('#btnBackup').onclick = function () { $('#backupDlg').showModal(); };
+})();
+</script>
+</body>
+</html>

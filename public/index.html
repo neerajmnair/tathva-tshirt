@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111318">
+<title>Tathva Scanner</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+  :root { --bg:#111318; --card:#1b1f27; --line:#2c323d; --fg:#f2f4f8; --muted:#9aa3b2;
+          --ok:#1f9d55; --warn:#d98200; --err:#c62f3b; --accent:#2f6df6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+              font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overscroll-behavior:none; }
+  body { display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:10px; padding:10px 14px;
+           padding-top:calc(10px + env(safe-area-inset-top)); border-bottom:1px solid var(--line); font-size:14px; }
+  #staffTag { font-weight:700; }
+  #health { margin-left:auto; color:var(--muted); font-size:13px; white-space:nowrap; }
+  #health.on { color:#5ad07f; } #health.off { color:#ff7b86; }
+  main { flex:1; position:relative; overflow:hidden; }
+  #camWrap { position:absolute; inset:0; background:#000; }
+  video { width:100%; height:100%; object-fit:cover; }
+  #reticle { position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
+             width:min(68vw,300px); aspect-ratio:1; border:3px solid rgba(255,255,255,.85);
+             border-radius:18px; box-shadow:0 0 0 100vmax rgba(0,0,0,.45); }
+  #hint { position:absolute; left:0; right:0; bottom:calc(22px + env(safe-area-inset-bottom)); text-align:center;
+          color:#fff; font-size:15px; text-shadow:0 1px 3px #000; padding:0 16px; }
+  .overlay { position:absolute; inset:0; display:none; flex-direction:column; padding:16px;
+             padding-bottom:calc(16px + env(safe-area-inset-bottom)); background:var(--bg); }
+  .overlay.show { display:flex; }
+  .roll { font-size:30px; font-weight:800; letter-spacing:1px; word-break:break-all; }
+  .name { font-size:19px; color:var(--muted); margin-top:2px; min-height:24px; }
+  .sizeBox { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:8px 0; }
+  .sizeLabel { font-size:15px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; }
+  .size { font-size:clamp(90px,34vw,190px); font-weight:900; line-height:1; letter-spacing:-2px; }
+  .banner { border-radius:12px; padding:12px; text-align:center; font-size:19px; font-weight:800; letter-spacing:1px; }
+  .banner.ok { background:var(--ok); } .banner.warn { background:var(--warn); }
+  .banner.err { background:var(--err); } .banner small { display:block; font-size:14px; font-weight:600; opacity:.9; margin-top:4px; letter-spacing:0; }
+  button { font-family:inherit; border:0; border-radius:14px; color:#fff; font-weight:800; }
+  .btn-primary { width:100%; padding:26px 12px; font-size:26px; letter-spacing:1px; background:var(--accent); }
+  .btn-give { background:var(--ok); }
+  .btn-ghost { background:#262c36; padding:15px; font-size:16px; width:100%; margin-top:10px; }
+  .row { display:flex; gap:10px; }
+  .row > button { flex:1; }
+  #setup { position:absolute; inset:0; background:var(--bg); display:none; flex-direction:column;
+           justify-content:center; padding:24px; gap:14px; z-index:5; }
+  #setup.show { display:flex; }
+  input { width:100%; padding:16px; font-size:19px; border-radius:12px; border:1px solid var(--line);
+          background:var(--card); color:var(--fg); }
+  h1 { font-size:22px; margin:0 0 4px; } p.sub { color:var(--muted); margin:0; font-size:15px; }
+  #counter { font-size:13px; color:var(--muted); }
+  .spin { display:inline-block; width:15px; height:15px; border:2px solid #fff6; border-top-color:#fff;
+          border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span id="staffTag">--</span>
+  <span id="counter">0 given</span>
+  <span id="health">● checking</span>
+</header>
+
+<main>
+  <div id="camWrap">
+    <video id="video" playsinline muted autoplay></video>
+    <div id="reticle"></div>
+    <div id="hint">Point at the student's QR code</div>
+  </div>
+
+  <!-- Result of a lookup -->
+  <section id="result" class="overlay">
+    <div class="roll" id="rRoll">--</div>
+    <div class="name" id="rName"></div>
+    <div class="sizeBox">
+      <div class="sizeLabel">T-Shirt Size</div>
+      <div class="size" id="rSize">--</div>
+    </div>
+    <div id="rBanner" class="banner" style="display:none"></div>
+    <div style="margin-top:12px">
+      <button id="btnGive" class="btn-primary btn-give">MARK AS GIVEN</button>
+      <button id="btnNext" class="btn-ghost">SCAN NEXT</button>
+    </div>
+  </section>
+
+  <!-- Camera unavailable / manual entry -->
+  <section id="manual" class="overlay">
+    <h1>Enter roll number</h1>
+    <p class="sub" id="manualWhy"></p>
+    <input id="manualInput" autocapitalize="characters" autocomplete="off" placeholder="B22CS001">
+    <div class="row" style="margin-top:12px">
+      <button id="manualGo" class="btn-primary">LOOK UP</button>
+    </div>
+    <button id="manualBack" class="btn-ghost">Back to camera</button>
+  </section>
+
+  <div id="setup">
+    <h1>Tathva T-Shirt Distribution</h1>
+    <p class="sub">Who is on this phone? This is saved with every collection.</p>
+    <input id="staffInput" placeholder="Phone A / your name" autocomplete="off">
+    <button id="staffGo" class="btn-primary">START SCANNING</button>
+  </div>
+</main>
+
+<script src="/vendor/jsqr.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var API_TIMEOUT = 8000;
+  var staff = localStorage.getItem('tathva_staff') || '';
+  var given = parseInt(localStorage.getItem('tathva_given') || '0', 10);
+  var current = null;          // student currently on screen
+  var busy = false;
+  var scanning = false;
+  var lastPayload = '';
+  var lastPayloadAt = 0;
+  var stream = null;
+  var detector = null;
+
+  // ---------------------------------------------------------------- helpers
+  function show(el, on) { el.classList.toggle('show', !!on); }
+  function beep(ok) {
+    try { navigator.vibrate && navigator.vibrate(ok ? 40 : [60, 50, 60]); } catch (e) {}
+    try {
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      var ctx = beep.ctx || (beep.ctx = new C());
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = ok ? 880 : 300; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.09, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+      o.start(); o.stop(ctx.currentTime + 0.18);
+    } catch (e) {}
+  }
+  function api(path, opts) {
+    opts = opts || {};
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, API_TIMEOUT);
+    opts.signal = ctrl.signal;
+    return fetch(path, opts)
+      .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+      .finally(function () { clearTimeout(t); });
+  }
+  function fmtTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ---------------------------------------------------------------- health
+  var healthEl = $('health');
+  function ping() {
+    api('/api/health').then(function (r) {
+      healthEl.className = r.status === 200 ? 'on' : 'off';
+      healthEl.textContent = r.status === 200 ? '● connected' : '● server error';
+    }).catch(function () {
+      healthEl.className = 'off';
+      healthEl.textContent = '● server offline';
+    });
+  }
+  setInterval(ping, 5000); ping();
+
+  // ---------------------------------------------------------------- staff
+  function setStaff(v) {
+    staff = v; localStorage.setItem('tathva_staff', v);
+    $('staffTag').textContent = v;
+  }
+  $('staffGo').onclick = function () {
+    var v = ($('staffInput').value || '').trim();
+    if (!v) { $('staffInput').focus(); return; }
+    setStaff(v); show($('setup'), false); startCamera();
+  };
+  $('staffInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('staffGo').click(); });
+  $('staffTag').onclick = function () {
+    $('staffInput').value = staff; show($('setup'), true);
+  };
+  function renderCounter() { $('counter').textContent = given + ' given'; }
+  renderCounter();
+
+  // ---------------------------------------------------------------- camera
+  var video = $('video');
+  var canvas = document.createElement('canvas');
+  var cctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function cameraFailed(why) {
+    scanning = false;
+    $('manualWhy').textContent = why;
+    show($('manual'), true);
+  }
+
+  function startCamera() {
+    if (stream) { scanning = true; requestAnimationFrame(tick); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return cameraFailed(window.isSecureContext
+        ? 'This browser has no camera API. Use the HTTPS address, or type roll numbers here.'
+        : 'Camera needs a secure connection. Open the https:// address shown on the laptop, or type roll numbers here.');
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    }).then(function (s) {
+      stream = s; video.srcObject = s;
+      return video.play();
+    }).then(function () {
+      if (window.BarcodeDetector) {
+        try { detector = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; }
+      }
+      scanning = true;
+      requestAnimationFrame(tick);
+    }).catch(function (e) {
+      cameraFailed('Camera unavailable (' + (e && e.name ? e.name : 'error') + '). ' +
+        (window.isSecureContext ? 'Allow camera access in the browser prompt.'
+                                : 'Open the https:// address shown on the laptop for camera access.'));
+    });
+  }
+
+  function tick() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      if (detector) {
+        detector.detect(video).then(function (codes) {
+          if (codes && codes.length) onPayload(codes[0].rawValue);
+        }).catch(function () { detector = null; });
+      } else {
+        var w = video.videoWidth, h = video.videoHeight;
+        if (w && h) {
+          var side = Math.floor(Math.min(w, h) * 0.75);
+          canvas.width = side; canvas.height = side;
+          cctx.drawImage(video, (w - side) / 2, (h - side) / 2, side, side, 0, 0, side, side);
+          var img = cctx.getImageData(0, 0, side, side);
+          var code = window.jsQR(img.data, side, side, { inversionAttempts: 'dontInvert' });
+          if (code && code.data) onPayload(code.data);
+        }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ---------------------------------------------------------------- lookup
+  function onPayload(raw) {
+    var now = Date.now();
+    if (busy) return;
+    if (raw === lastPayload && now - lastPayloadAt < 2500) return;
+    lastPayload = raw; lastPayloadAt = now;
+    lookup(raw);
+  }
+
+  function lookup(raw) {
+    busy = true; scanning = false;
+    current = null;
+    $('rRoll').textContent = String(raw).slice(0, 40);
+    $('rName').textContent = '';
+    $('rSize').innerHTML = '<span class="spin"></span>';
+    banner(null);
+    $('btnGive').style.display = 'none';
+    nextIsPrimary(false);
+    show($('result'), true);
+
+    api('/api/students/' + encodeURIComponent(String(raw).trim()))
+      .then(function (r) {
+        var b = r.body || {};
+        if (r.status === 200 && b.student) {
+          current = b.student;
+          render(b.student);
+        } else if (b.status === 'NOT_FOUND') {
+          beep(false);
+          $('rSize').textContent = '?';
+          banner('err', 'STUDENT NOT FOUND', 'This roll number is not in the list. Send them to the help desk.');
+          nextIsPrimary(true);
+        } else if (b.status === 'INVALID_ROLL_NO') {
+          beep(false);
+          $('rSize').textContent = '?';
+          banner('err', 'INVALID QR CODE', 'That is not a Tathva student QR.');
+          nextIsPrimary(true);
+        } else {
+          beep(false);
+          $('rSize').textContent = '!';
+          banner('err', 'SERVER ERROR', (b && b.error) || ('HTTP ' + r.status));
+        }
+      })
+      .catch(function (e) {
+        beep(false);
+        $('rSize').textContent = '!';
+        banner('err', 'SERVER UNREACHABLE',
+          'Check the phone is on the laptop hotspot. Nothing was marked.');
+        retryButton(function () { lookup(raw); });
+      })
+      .finally(function () { busy = false; });
+  }
+
+  function render(s) {
+    $('rRoll').textContent = s.rollNo;
+    $('rName').textContent = s.name || '';
+    $('rSize').textContent = s.tshirtSize;
+    if (s.collected) {
+      beep(false);
+      banner('warn', 'ALREADY COLLECTED',
+        'Collected at ' + fmtTime(s.collectedAt) + (s.collectedBy ? ' by ' + s.collectedBy : ''));
+      $('btnGive').style.display = 'none';
+      nextIsPrimary(true);
+    } else {
+      beep(true);
+      banner(null);
+      $('btnGive').textContent = 'MARK AS GIVEN';
+      $('btnGive').disabled = false;
+      $('btnGive').style.display = 'block';
+    }
+  }
+
+  // On a terminal result (given / already / not found) there is nothing left to
+  // tap except SCAN NEXT, so promote it to the big button.
+  function nextIsPrimary(on) {
+    $('btnNext').className = on ? 'btn-primary' : 'btn-ghost';
+    $('btnNext').textContent = 'SCAN NEXT';
+  }
+
+  function banner(kind, text, sub) {
+    var el = $('rBanner');
+    if (!kind) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.className = 'banner ' + kind;
+    el.innerHTML = text + (sub ? '<small>' + sub + '</small>' : '');
+    el.style.display = 'block';
+  }
+
+  function retryButton(fn) {
+    var b = $('btnGive');
+    b.textContent = 'RETRY';
+    b.disabled = false;
+    b.style.display = 'block';
+    b.className = 'btn-primary';
+    b.onclick = function () { b.className = 'btn-primary btn-give'; b.onclick = collect; fn(); };
+  }
+
+  // --------------------------------------------------------------- collect
+  function collect() {
+    if (!current || busy) return;
+    busy = true;
+    var btn = $('btnGive');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> SAVING...';
+
+    api('/api/students/' + encodeURIComponent(current.rollNo) + '/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collectedBy: staff || 'unknown' })
+    }).then(function (r) {
+      var b = r.body || {};
+      if (b.success && b.status === 'COLLECTED') {
+        beep(true);
+        given++; localStorage.setItem('tathva_given', String(given)); renderCounter();
+        banner('ok', 'GIVEN - ' + b.student.tshirtSize, 'Recorded at ' + fmtTime(b.student.collectedAt));
+        btn.style.display = 'none';
+        nextIsPrimary(true);
+        current = b.student;
+      } else if (b.status === 'ALREADY_COLLECTED') {
+        beep(false);
+        banner('warn', 'ALREADY COLLECTED',
+          'Collected at ' + fmtTime(b.student && b.student.collectedAt) +
+          (b.student && b.student.collectedBy ? ' by ' + b.student.collectedBy : '') + ' - do not give another shirt');
+        btn.style.display = 'none';
+        nextIsPrimary(true);
+      } else if (b.status === 'NOT_FOUND') {
+        beep(false);
+        banner('err', 'STUDENT NOT FOUND', 'Nothing was marked.');
+        btn.style.display = 'none';
+        nextIsPrimary(true);
+      } else {
+        beep(false);
+        banner('err', 'NOT SAVED', (b && b.error) || ('HTTP ' + r.status));
+        btn.disabled = false; btn.textContent = 'RETRY MARK AS GIVEN';
+      }
+    }).catch(function () {
+      // Never claim success without a server confirmation.
+      beep(false);
+      banner('err', 'NOT SAVED - SERVER UNREACHABLE', 'Check the hotspot connection and press retry.');
+      btn.disabled = false; btn.textContent = 'RETRY MARK AS GIVEN';
+    }).finally(function () { busy = false; });
+  }
+
+  $('btnGive').onclick = collect;
+
+  function scanNext() {
+    show($('result'), false);
+    banner(null);
+    current = null;
+    $('btnGive').className = 'btn-primary btn-give';
+    $('btnGive').onclick = collect;
+    $('btnGive').disabled = false;
+    nextIsPrimary(false);
+    lastPayload = '';
+    if (stream) { scanning = true; requestAnimationFrame(tick); }
+    else show($('manual'), true);
+  }
+  $('btnNext').onclick = scanNext;
+
+  // ---------------------------------------------------------- manual entry
+  $('manualGo').onclick = function () {
+    var v = ($('manualInput').value || '').trim();
+    if (!v) return;
+    $('manualInput').value = '';
+    show($('manual'), false);
+    lookup(v);
+  };
+  $('manualInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('manualGo').click(); });
+  $('manualBack').onclick = function () { show($('manual'), false); startCamera(); };
+  $('hint').onclick = function () { show($('manual'), true); $('manualWhy').textContent = 'Type the roll number if the QR will not scan.'; };
+
+  // After a result closes with no camera, go back to manual entry.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && stream && !$('result').classList.contains('show')) {
+      scanning = true; requestAnimationFrame(tick);
+    }
+  });
+
+  // ----------------------------------------------------------------- boot
+  if (!staff) { show($('setup'), true); }
+  else { setStaff(staff); startCamera(); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional overrides: exact Google account email -> roll number. Remove this key in production.",
+  "student@example.com": "B22CS001"
+}

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tathva Student QR</title>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --fg:#14181f; --muted:#68717f; --line:#dfe3ea; --accent:#2f6df6; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--fg); display:flex;
+         align-items:center; justify-content:center; padding:20px;
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:26px;
+          width:100%; max-width:420px; text-align:center; }
+  h1 { font-size:18px; letter-spacing:1px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+  .email { font-size:14px; color:var(--muted); word-break:break-all; }
+  .rollLabel { font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-top:18px; }
+  .roll { font-size:32px; font-weight:800; letter-spacing:1px; word-break:break-all; }
+  #qr { margin:18px auto 6px; width:250px; height:250px; display:flex; align-items:center; justify-content:center; }
+  #qr img, #qr canvas { width:100%; height:100%; image-rendering:pixelated; }
+  .note { font-size:13px; color:var(--muted); margin-top:10px; }
+  button { font:inherit; font-weight:600; padding:11px 16px; border-radius:9px; border:1px solid var(--line);
+           background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  input { width:100%; padding:12px; font-size:16px; border:1px solid var(--line); border-radius:9px; text-transform:uppercase; }
+  .err { background:#fdeaec; color:#a3222d; padding:11px; border-radius:9px; font-size:14px; margin-top:12px; text-align:left; }
+  .hide { display:none; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>TATHVA</h1>
+  <p class="sub">Show this QR code at the t-shirt counter</p>
+
+  <div id="signin">
+    <div id="gbtn" style="display:flex;justify-content:center"></div>
+    <div id="noconfig" class="err hide">
+      Google sign-in is not configured yet. Set <code>googleClientId</code> in
+      <code>qr-portal/config.js</code>.
+    </div>
+  </div>
+
+  <div id="manual" class="hide">
+    <div class="rollLabel">Enter your roll number</div>
+    <input id="manualInput" placeholder="B22CS001" autocomplete="off">
+    <div class="row"><button class="primary" id="manualGo" style="flex:1">Show my QR</button></div>
+  </div>
+
+  <div id="pass" class="hide">
+    <div class="email" id="email"></div>
+    <div class="rollLabel">Roll No</div>
+    <div class="roll" id="roll">--</div>
+    <div id="qr"></div>
+    <p class="note">The counter scans this code. It contains only your roll number.</p>
+    <button id="signout">Sign out</button>
+  </div>
+
+  <div id="error" class="err hide"></div>
+</div>
+
+<script src="qrcode.min.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var CFG = window.TATHVA_QR_CONFIG || {};
+  var $ = function (id) { return document.getElementById(id); };
+  var overrides = {};
+
+  function showError(msg) { $('error').textContent = msg; $('error').classList.remove('hide'); }
+  function clearError() { $('error').classList.add('hide'); }
+
+  function decodeJwt(token) {
+    var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(decodeURIComponent(atob(part).split('').map(function (c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join('')));
+  }
+
+  function rollFromEmail(email) {
+    var e = String(email || '').toLowerCase();
+    if (overrides[e]) return String(overrides[e]).toUpperCase();
+    var pats = CFG.rollNoPatterns || [];
+    for (var i = 0; i < pats.length; i++) {
+      var m = pats[i].exec(e);
+      if (m && m[1]) return m[1].toUpperCase();
+    }
+    return null;
+  }
+
+  function renderQr(roll) {
+    var payload = CFG.qrFormat === 'versioned' ? 'TATHVA:' + roll : roll;
+    var qr = window.qrcode(0, 'M');      // type 0 = auto-size, error correction M
+    qr.addData(payload);
+    qr.make();
+    $('qr').innerHTML = qr.createImgTag(8, 0);
+    $('roll').textContent = roll;
+  }
+
+  function showPass(email, roll) {
+    clearError();
+    $('signin').classList.add('hide');
+    $('manual').classList.add('hide');
+    $('pass').classList.remove('hide');
+    $('email').textContent = email || '';
+    renderQr(roll);
+    try { sessionStorage.setItem('tathva_pass', JSON.stringify({ email: email, roll: roll })); } catch (e) {}
+  }
+
+  function onCredential(resp) {
+    var claims;
+    try { claims = decodeJwt(resp.credential); }
+    catch (e) { return showError('Could not read the Google sign-in response.'); }
+
+    var email = claims.email || '';
+    if (!claims.email_verified) return showError('This Google account has no verified email address.');
+    if (CFG.allowedEmailDomain && email.split('@')[1] !== CFG.allowedEmailDomain) {
+      return showError('Sign in with your ' + CFG.allowedEmailDomain + ' account (you used ' + email + ').');
+    }
+    var roll = rollFromEmail(email);
+    if (roll) return showPass(email, roll);
+
+    if (CFG.allowManualEntry) {
+      $('signin').classList.add('hide');
+      $('manual').classList.remove('hide');
+      showError('We could not read a roll number from ' + email + '. Please type it.');
+      $('manualGo').onclick = function () {
+        var v = ($('manualInput').value || '').trim().replace(/\s+/g, '').toUpperCase();
+        if (!/^[A-Z0-9][A-Z0-9._\-\/]{1,31}$/.test(v)) return showError('That roll number does not look right.');
+        showPass(email, v);
+      };
+    } else {
+      showError('No roll number is mapped to ' + email + '. Contact the Tathva desk.');
+    }
+  }
+
+  $('signout').onclick = function () {
+    try { sessionStorage.removeItem('tathva_pass'); } catch (e) {}
+    if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+    location.reload();
+  };
+
+  function initGoogle() {
+    if (!CFG.googleClientId) { $('noconfig').classList.remove('hide'); return; }
+    if (!(window.google && google.accounts && google.accounts.id)) {
+      return showError('Could not load Google sign-in. Check your internet connection.');
+    }
+    google.accounts.id.initialize({ client_id: CFG.googleClientId, callback: onCredential, auto_select: true });
+    google.accounts.id.renderButton($('gbtn'), { theme: 'filled_blue', size: 'large', text: 'signin_with' });
+    google.accounts.id.prompt();
+  }
+
+  // Restore the pass on reload so students do not re-auth in a queue.
+  try {
+    var saved = JSON.parse(sessionStorage.getItem('tathva_pass') || 'null');
+    if (saved && saved.roll) showPass(saved.email, saved.roll);
+  } catch (e) {}
+
+  fetch(CFG.rollNoMapUrl || 'rollno-map.json')
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (m) {
+      overrides = {};
+      Object.keys(m || {}).forEach(function (k) { if (k[0] !== '_') overrides[k.toLowerCase()] = m[k]; });
+    })
+    .catch(function () {})
+    .finally(function () {
+      var s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true; s.defer = true;
+      s.onload = initGoogle;
+      s.onerror = function () { showError('Could not load Google sign-in (no internet connection).'); };
+      document.head.appendChild(s);
+    });
+})();
+</script>
+</body>
+</html>
