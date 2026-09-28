@@ -1,6 +1,10 @@
 node_modules/
 .env
 certs/
-*.sql
 backups/
 .DS_Store
+
+# Database dumps may contain real student data - ignore them everywhere.
+# The schema is DDL, not data, so it is explicitly allowed back in.
+*.sql
+!server/src/schema.sql
